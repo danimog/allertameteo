@@ -8,5 +8,4 @@ Il banner mostra, in fase di allerta meteo, gli stati di allerta con un banner c
 Inserire la cartella all'interno dei moduli di drupal e attivare il modulo dalle impostazioni.
 Scegliere nei blocchi dove posizionare il banner.
 
-Progetto: Daniele Moggia
-Web: www.danielemoggia.it
+<h5>www.danielemoggia.it</h5>
