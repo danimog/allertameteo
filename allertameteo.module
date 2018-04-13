@@ -1,0 +1,215 @@
+<?php
+
+function allertameteo_block_info() {
+  // This example comes from node.module.
+  $blocks['allertameteo'] = array(
+    'info' => t('Allerta Meteo Regione Liguria')
+  );
+
+  return $blocks;
+}
+
+function allertameteo_block_view($delta = '') {
+  $block = array();
+
+  switch ($delta) {
+    case 'allertameteo':
+      $block['subject'] = t('Allerta Meteo - Regione Liguria');
+      $block['content'] = block_allertameteo_contents($delta);
+      break;
+  }
+  return $block;
+}
+
+function block_allertameteo_contents($block_contents){
+//l'URL utilizzato proviene dalla mappa della rete sentieristica del Parco Cinque Terre
+  $url = "http://maps.t5t.it/jsdata/allertaliguria.xml";
+
+  $ch = curl_init();
+  curl_setopt($ch, CURLOPT_URL, $url);
+  curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+  $xmlresponse = curl_exec($ch);
+  $xml = simplexml_load_string($xmlresponse);
+  $value = "";
+  
+  if (!$xml){
+    return "Errore nella lettura del file XML";
+  } 
+  else{   
+    $value .= getAllertaIdrogeologica($xml);
+    $value .= getAllertaNivologica($xml);
+
+    return $value;
+  }
+}
+
+
+function getAllertaIdrogeologica($xml){
+  /**
+  * DEFINIZIONE VARIABILI
+  * maxAllerta | livello massimo di allerta espresso in numeri da 0->verde a 3->rosso
+  * coloreAllerta | colora lo sfondo del div in base al colore dell'allerta
+  * i | contatore che assieme a valoreIntervallo serve a ricordare l'intervalloLivello con allerta più alta
+  */
+
+  $value = "";
+  $maxAllerta = 0;
+  $messaggioParco = 'Come previsto dai Piani di Protezione Civile dei Comuni delle Cinque Terre, l\'accesso alla rete sentieristica è interdetto per motivi di sicurezza e pertanto non sono acquistabili le Carte Servizi Cinque Terre Card';
+  $coloreAllerta = 'green';
+  $i = 0;
+  $valoreIntervallo = 0;
+  $att = 'dataEmissione';
+  $dataEmisAlert = $xml->attributes()->$att;
+
+  $today = strtotime(date('YmdHi'));
+  $dateAlert = strtotime($dataEmisAlert);
+
+// controllo tutti i livelli di allerta presenti e assegno il valore di allerta a quella eventualmente più alta, assegnando allo stesso tempo il colore
+  foreach ($xml->Zone->Zona[2]->AllertaIdrogeologica->PiccoliBacini->IntervalliLivello->IntervalloLivello as $livelloAllerta){
+    if ($livelloAllerta->livello == 'GIALLA' & $maxAllerta <= 1){
+      $maxAllerta = 1;
+      $coloreAllerta = 'yellow';
+      $valoreIntervallo = $i;
+    }
+    else if ($livelloAllerta->livello == 'ARANCIONE' & $maxAllerta <=2) {
+      $maxAllerta = 2;
+      $coloreAllerta = 'orange';
+      $valoreIntervallo = $i;
+    }
+    else if ($livelloAllerta->livello == 'ROSSA' & $maxAllerta <=3) {
+      $maxAllerta = 3;
+      $coloreAllerta = 'red';
+      $valoreIntervallo = $i;
+    }
+    $i = $i +1;
+  }
+    
+ //   if($maxAllerta > 0 && $today < $dateAlert){
+
+// se è presente un fenomeno di allerta creo il blocco di codice HTML per il modulo
+
+ if($maxAllerta > 0){
+    $dataEmissioneAllerta = formattaData($dataEmisAlert);
+    $oraEmissioneAllerta = formattaOra($dataEmisAlert);
+    $messaggioAllerta = $dataEmissioneAllerta.' - '.$oraEmissioneAllerta;
+    
+
+    $value .='<div class=\'allerta\' style=background-color:'.$coloreAllerta.'>';
+    $value .='<br><h4>Messaggio di <strong>Allerta Meteo</strong> del '.$messaggioAllerta.': <a target=\'_blank\' href=\'http://www.allertaliguria.gov.it\'>segui gli aggiornamenti</a></h4>';
+    $value .='';
+
+    $dataOraInizio = $xml->Zone->Zona[2]->AllertaIdrogeologica->PiccoliBacini->IntervalliLivello->IntervalloLivello[$valoreIntervallo]->dataOraInizio;
+    $dataOraFine = $xml->Zone->Zona[2]->AllertaIdrogeologica->PiccoliBacini->IntervalliLivello->IntervalloLivello[$valoreIntervallo]->dataOraFine;
+    $livello = $xml->Zone->Zona[2]->AllertaIdrogeologica->PiccoliBacini->IntervalliLivello->IntervalloLivello[$valoreIntervallo]->livello;
+
+  // Richiamo funzioni per la formattazione di ora e data - 201712011235 (AAAA MM GG HH MM)
+    $dataInizio = formattaData($dataOraInizio);
+    $oraInizio = formattaOra($dataOraInizio);
+    $dataFine = formattaData($dataOraFine);
+    $oraFine = formattaOra($dataOraFine);
+
+    $value .= '<h5>';
+    $value .= 'ALLERTA: '.$livello;
+    $value .= '<BR>'.'Data e Ora di inizio: '.$dataInizio.' dalle '.$oraInizio;
+    $value .= '<BR>'.'Data e Ora di fine: '.$dataFine.' dalle '.$oraFine;
+    $value .= '</h5>';
+    if ($maxAllerta > 1) {
+      $value .= '<BR><h4><strong>'.$messaggioParco.'</strong></h4>'; //messaggio fase 1 del Parco Cinque Terre se allerta arancione o rossa
+    }
+    $value .= '</div>';
+
+    return $value;
+  }
+}
+
+function getAllertaNivologica($xml){
+/**
+  * DEFINIZIONE VARIABILI
+  * maxAllerta | livello massimo di allerta espresso in numeri da 0->verde a 3->rosso
+  * coloreAllerta | colora lo sfondo del div in base al colore dell'allerta
+  * i | contatore che assieme a valoreIntervallo serve a ricordare l'intervalloLivello con allerta più alta
+  */
+  $value = "";
+  $maxAllerta = 0;
+  $coloreAllerta = 'green';
+  $i = 0;
+  $valoreIntervallo = 0;
+  $att = 'dataEmissione';
+  $dataEmisAlert = $xml->attributes()->$att;
+
+  $today = strtotime(date('YmdHi'));
+  $dateAlert = strtotime($dataEmisAlert);
+
+// controllo tutti i livelli di allerta presenti e assegno il valore di allerta a quella eventualmente più alta, assegnando allo stesso tempo il colore
+  foreach ($xml->Zone->Zona[2]->AllertaNivologica->ComuniCostieri->IntervalliLivello->IntervalloLivello as $livelloAllertaNivo){
+    if ($livelloAllertaNivo->livello == 'GIALLA' & $maxAllerta <= 1){
+      $maxAllerta = 1;
+      $coloreAllerta = 'yellow';
+      $valoreIntervallo = $i;
+    }
+    else if ($livelloAllertaNivo->livello == 'ARANCIONE' & $maxAllerta <=2) {
+      $maxAllerta = 2;
+      $coloreAllerta = 'orange';
+      $valoreIntervallo = $i;
+    }
+    else if ($livelloAllertaNivo->livello == 'ROSSA' & $maxAllerta <=3) {
+      $maxAllerta = 3;
+      $coloreAllerta = 'red';
+      $valoreIntervallo = $i;
+    }
+    $i = $i +1;
+  }
+    
+ //   if($maxAllerta > 0 && $today < $dateAlert){
+
+// se è presente un fenomeno di allerta creo il blocco di codice HTML per il modulo
+
+ if($maxAllerta > 0){
+
+    $dataEmissioneAllerta = formattaData($dataEmisAlert);
+    $oraEmissioneAllerta = formattaOra($dataEmisAlert);
+    $messaggioAllerta = $dataEmissioneAllerta.' - '.$oraEmissioneAllerta;
+    
+
+    $value .='<div class=\'allerta\' style=background-color:'.$coloreAllerta.'>';
+    $value .='<br><h4>Messaggio di <strong>Allerta Nivologica</strong> del '.$messaggioAllerta.': <a target=\'_blank\' href=\'http://www.allertaliguria.gov.it\'>segui gli aggiornamenti</a></h4>';
+    $value .='';
+
+    $dataOraInizio = $xml->Zone->Zona[2]->AllertaNivologica->ComuniCostieri->IntervalliLivello->IntervalloLivello[$valoreIntervallo]->dataOraInizio;
+    $dataOraFine = $xml->Zone->Zona[2]->AllertaNivologica->ComuniCostieri->IntervalliLivello->IntervalloLivello[$valoreIntervallo]->dataOraFine;
+    $livello = $xml->Zone->Zona[2]->AllertaNivologica->ComuniCostieri->IntervalliLivello->IntervalloLivello[$valoreIntervallo]->livello;
+
+  // Richiamo funzioni per la formattazione di ora e data - 201712011235 (AAAA MM GG HH MM)
+    $dataInizio = formattaData($dataOraInizio);
+    $oraInizio = formattaOra($dataOraInizio);
+    $dataFine = formattaData($dataOraFine);
+    $oraFine = formattaOra($dataOraFine);
+
+    $value .= '<h5>';
+    $value .= 'ALLERTA: '.$livello;
+    $value .= '<BR>'.'Data e Ora di inizio: '.$dataInizio.' dalle '.$oraInizio;
+    $value .= '<BR>'.'Data e Ora di fine: '.$dataFine.' dalle '.$oraFine;
+    $value .= '</h5>';
+   
+    $value .= '</div>';
+
+    return $value;
+  }
+}
+
+function formattaOra($valore){
+  $ore = substr($valore, 8,2);
+  $minuti = substr($valore, 10,2);
+  $orario = $ore.'.'.$minuti;
+
+  return $orario;
+}
+
+function formattaData($valore){
+  $giorno = substr($valore, 6, 2);
+  $mese = substr($valore, 4, 2);
+  $anno = substr($valore, 0,4);
+  $data = $giorno.".".$mese.".".$anno;
+
+  return $data;
+}

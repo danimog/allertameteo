@@ -1,0 +1,9 @@
+name = Allerte Meteo	
+description = Allerta Meteo Regione Liguria
+core = 7.x
+
+files[] = allertameteo.module
+
+version = "7.x-1.4"
+core = "7.x"
+project = "allertameteo"
